@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIDR to IP List</title>
+    <style>
+        .toggle-container {
+            display: inline-flex;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            border-radius: 5px;
+        }
+
+        .toggle-btn {
+            padding: 5px 10px;
+            cursor: pointer;
+            background-color: #f1f1f1;
+            border: none;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-btn.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+
+</head>
+
+<body>
+    <h1>CIDR to IP List Converter</h1>
+
+    <h3><label for="cidr">Enter CIDRs (one per line):</label><br></h3>
+    <textarea id="cidr" rows="10" cols="30" placeholder="e.g. 192.168.1.0/24"></textarea><br>
+    <button onclick="convertCIDR()">Convert</button>
+
+    <h3>IP Output:</h3>
+    <textarea id="ipOutput" cols="30" rows="30" readonly></textarea><br>
+    <div class="toggle-container">
+        <button class="toggle-btn active" onclick="setOutputView('list')">List</button>
+        <button class="toggle-btn" onclick="setOutputView('csv')">CSV</button>
+    </div>
+    <button id="copyButton" onclick="copyOutput()">Copy List</button>
+
+    <h3>Number of IP Addresses: <span id="count">0</span></h3>
+
+    <script>
+        const ipList = [];
+
+        function Netmask(cidr) {
+            const [ip, prefix] = cidr.split('/');
+            this.baseIp = ip;
+            this.prefixLength = parseInt(prefix);
+            this.subnetMask = (-1 << (32 - this.prefixLength)) >>> 0;
+            const ipParts = this.baseIp.split('.').map(part => parseInt(part));
+            this.baseIpNumber = ((ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3]) & this.subnetMask;
+            this.size = Math.pow(2, 32 - this.prefixLength);
+        }
+
+        Netmask.prototype.range = function() {
+            let rangeList = [];
+            for (let i = 0; i < this.size; i++) {
+                const currentIpNumber = this.baseIpNumber + i;
+                const o1 = (currentIpNumber & 0xFF000000) >>> 24;
+                const o2 = (currentIpNumber & 0x00FF0000) >>> 16;
+                const o3 = (currentIpNumber & 0x0000FF00) >>> 8;
+                const o4 = currentIpNumber & 0x000000FF;
+                rangeList.push(`${o1}.${o2}.${o3}.${o4}`);
+            }
+            return rangeList;
+        };
+
+        function convertCIDR() {
+            const input = document.getElementById('cidr').value.split('\n');
+            const countEl = document.getElementById('count');
+            ipList.length = 0;
+
+            input.forEach(cidr => {
+                if (cidr.trim() === '') return;
+                let netmask = new Netmask(cidr);
+                ipList.push(...netmask.range());
+            });
+
+            updateOutputFormat();
+            countEl.innerText = ipList.length;
+        }
+
+        function updateOutputFormat() {
+            const listViewActive = document.querySelector('.toggle-btn:nth-child(1)').classList.contains('active');
+            const output = document.getElementById('ipOutput');
+            const copyButton = document.getElementById('copyButton');
+            
+            if (listViewActive) {
+                output.value = ipList.join('\n');
+                copyButton.innerText = "Copy List";
+            } else {
+                output.value = ipList.join(', ');
+                copyButton.innerText = "Copy CSV";
+            }
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('ipOutput');
+            output.select();
+            document.execCommand('copy');
+        }
+
+        function setOutputView(view) {
+            const buttons = document.querySelectorAll('.toggle-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            if (view === 'list') {
+                document.getElementById('copyButton').innerText = "Copy List";
+                document.querySelector('.toggle-btn:nth-child(1)').classList.add('active');
+            } else {
+                document.getElementById('copyButton').innerText = "Copy CSV";
+                document.querySelector('.toggle-btn:nth-child(2)').classList.add('active');
+            }
+            updateOutputFormat();
+        }
+
+        setOutputView('list');
+    </script>
+</body>
+
+</html>
