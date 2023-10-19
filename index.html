@@ -25,6 +25,12 @@
             background-color: #4CAF50;
             color: white;
         }
+
+        .flash-error {
+            color: red;
+            margin: 1em 0;
+            display: none;  /* Initially hidden */
+        }
     </style>
 
 </head>
@@ -34,6 +40,7 @@
 
     <h3><label for="cidr">Enter CIDRs (one per line):</label><br></h3>
     <textarea id="cidr" rows="10" cols="30" placeholder="e.g. 192.168.1.0/24"></textarea><br>
+    <span class="flash-error" id="errorDisplay"></span>
     <button onclick="convertCIDR()">Convert</button>
 
     <h3>IP Output:</h3>
@@ -77,12 +84,39 @@
             const countEl = document.getElementById('count');
             ipList.length = 0;
 
+            // Clear any previous error messages
+            document.getElementById('errorDisplay').style.display = 'none';
+
+            let totalIPs = 0;
+
+            for (let cidr of input) {
+                cidr = cidr.trim();
+
+                // Check if it's an IPv6 CIDR
+                if (cidr.includes(':')) {
+                    showError("Input is in IPv6 format. Only accepts IPv4.");
+                    return;
+                }
+
+                const netmask = new Netmask(cidr);
+                totalIPs += netmask.size;
+                if (totalIPs > MAX_IPS_CHROME_CAN_HANDLE) {
+                    showError(`Result contains ${totalIPs} IPs. Please use Python script.`);
+                    return;
+                }
+            }
+
+            // Detect overlapping ranges (this is a simple way to handle overlap)
+            const allIps = [];
             input.forEach(cidr => {
                 if (cidr.trim() === '') return;
                 let netmask = new Netmask(cidr);
-                ipList.push(...netmask.range());
+                allIps.push(...netmask.range());
             });
 
+            const uniqueIps = [...new Set(allIps)];  // Remove duplicates
+
+            ipList.push(...uniqueIps);
             updateOutputFormat();
             countEl.innerText = ipList.length;
         }
@@ -121,6 +155,40 @@
         }
 
         setOutputView('list');
+
+        function estimateMaxListSize() {
+            // Get information about Chrome's memory usage.
+            const memory = performance.memory;
+
+            // Get information about the user's operating system and browser version.
+            const userAgent = navigator.userAgent;
+
+            // Estimate the maximum amount of memory that Chrome can allocate to a list.
+            let maxListSize = memory.totalJSHeapSize * 0.5;
+
+            // Adjust the maximum list size based on the user's operating system and browser version.
+            if (userAgent.includes('Windows')) {
+                maxListSize *= 0.75;
+            } else if (userAgent.includes('macOS')) {
+                maxListSize *= 0.85;
+            } else if (userAgent.includes('Linux')) {
+                maxListSize *= 0.9;
+            }
+
+            return maxListSize;
+        }
+
+
+        const maxListSizeInBytes = estimateMaxListSize();
+        const IP_STRING_SIZE_ESTIMATE = 15; // Rough estimate of an IP string size, like "255.255.255.255"
+        const MAX_IPS_CHROME_CAN_HANDLE = maxListSizeInBytes / IP_STRING_SIZE_ESTIMATE;
+
+
+        function showError(message) {
+            const errorDisplay = document.getElementById('errorDisplay');
+            errorDisplay.innerText = message;
+            errorDisplay.style.display = 'block';
+        }
     </script>
 </body>
 
